@@ -41,7 +41,7 @@ export const useCipherProtocolWagmi = () => {
   const [polledTierHandle, setPolledTierHandle] = useState<string | undefined>(undefined);
 
   const hasContract = Boolean(cipher?.address && cipher?.abi);
-  const contractAddr = (cipher?.address ?? "0x0") as `0x${string}`;
+  const contractAddr = cipher?.address as `0x${string}` | undefined;
 
   const MAX_EUINT64 = (1n << 64n) - 1n;
   const MAX_EUINT32 = (1n << 32n) - 1n;
@@ -77,7 +77,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "userTier" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
   });
   const userTier = useMemo(() => (userTierResult.data as number | undefined) ?? 0, [userTierResult.data]);
@@ -87,7 +87,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "getDefaultCount" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
   });
   const defaultCount = useMemo(() => (defaultCountResult.data as number | undefined) ?? 0, [defaultCountResult.data]);
@@ -97,7 +97,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "getLoanInfo" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
   });
   const loanInfo = useMemo(() => {
@@ -112,7 +112,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "getRepaymentDue" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address && loanInfo.active), refetchOnWindowFocus: false },
   });
   const repaymentDue = useMemo(() => {
@@ -169,7 +169,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "getUserDepositValue" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
   });
   const userDepositValue = useMemo(
@@ -181,7 +181,7 @@ export const useCipherProtocolWagmi = () => {
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
     functionName: "deposits" as const,
-    args: [address ?? "0x0"],
+    args: address ? [address] : undefined,
     query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
   });
   const userDeposits = useMemo(() => (userDepositsResult.data as bigint | undefined) ?? 0n, [userDepositsResult.data]);
@@ -281,15 +281,17 @@ export const useCipherProtocolWagmi = () => {
 
   // ---------- Decrypt Setup ----------
   const { mutateAsync: allowAsync, isPending: isAllowing } = useAllow();
-  const { data: isAllowed } = useIsAllowed({ contractAddresses: [contractAddr] });
+  const { data: isAllowed } = useIsAllowed({
+    contractAddresses: contractAddr ? [contractAddr] : ["0x0000000000000000000000000000000000000000"],
+  });
 
   const [decryptEnabled, setDecryptEnabled] = useState(false);
 
   const decryptHandles = useMemo(() => {
     const handles: { handle: `0x${string}`; contractAddress: `0x${string}` }[] = [];
-    if (scoreHandle && scoreHandle !== ZERO_HANDLE)
+    if (scoreHandle && scoreHandle !== ZERO_HANDLE && contractAddr)
       handles.push({ handle: scoreHandle as `0x${string}`, contractAddress: contractAddr });
-    if (tierHandle && tierHandle !== ZERO_HANDLE)
+    if (tierHandle && tierHandle !== ZERO_HANDLE && contractAddr)
       handles.push({ handle: tierHandle as `0x${string}`, contractAddress: contractAddr });
     return handles;
   }, [scoreHandle, tierHandle, contractAddr]);
@@ -329,7 +331,7 @@ export const useCipherProtocolWagmi = () => {
     if (!isAllowed) {
       setMessage("Authorizing decryption... Check your wallet for a signature request.");
       try {
-        await allowAsync([contractAddr]);
+        if (contractAddr) await allowAsync([contractAddr]);
         setMessage("Authorization complete. Requesting decryption...");
       } catch (err) {
         setMessage(`Authorization failed: ${formatError(err)}`);

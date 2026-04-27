@@ -582,8 +582,16 @@ const PoolPanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWagm
 
 // ---------- Main Page ----------
 
+function useMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return mounted;
+}
+
 export default function Home() {
-  const { isConnected } = useAccount();
+  const { isConnected: rawIsConnected } = useAccount();
+  const mounted = useMounted();
+  const isConnected = mounted ? rawIsConnected : false;
   const cipher = useCipherProtocolWagmi();
 
   return (

@@ -8,6 +8,26 @@ import { useAccount, useBalance, useChainId, usePublicClient, useReadContract, u
 import { CipherProtocol } from "~~/contracts/CipherProtocol";
 import { deploymentFor } from "~~/utils/contract";
 
+/** Normalize caught errors into a clean user-facing string. */
+function formatError(e: unknown): string {
+  if (e instanceof Error) {
+    const msg = e.message.toLowerCase();
+    if (
+      msg.includes("user rejected") ||
+      msg.includes("request denied") ||
+      msg.includes("rejected") ||
+      msg.includes("cancelled")
+    ) {
+      return "Transaction rejected by user.";
+    }
+    if (msg.includes("insufficient funds")) {
+      return "Insufficient ETH for gas.";
+    }
+    return e.message;
+  }
+  return String(e);
+}
+
 export const useCipherProtocolWagmi = () => {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -26,7 +46,7 @@ export const useCipherProtocolWagmi = () => {
   const MAX_EUINT64 = (1n << 64n) - 1n;
   const MAX_EUINT32 = (1n << 32n) - 1n;
 
-  // ---------- Read: Encrypted Score (needs account so msg.sender is correct) ----------
+  // ---------- Read: Encrypted Score ----------
   const scoreResult = useReadContract({
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
@@ -39,7 +59,7 @@ export const useCipherProtocolWagmi = () => {
     [polledScoreHandle, scoreResult.data],
   );
 
-  // ---------- Read: Encrypted Tier (needs account so msg.sender is correct) ----------
+  // ---------- Read: Encrypted Tier ----------
   const tierResult = useReadContract({
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
@@ -52,7 +72,7 @@ export const useCipherProtocolWagmi = () => {
     [polledTierHandle, tierResult.data],
   );
 
-  // ---------- Read: User Tier (public) ----------
+  // ---------- Read: User Tier ----------
   const userTierResult = useReadContract({
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
@@ -87,14 +107,20 @@ export const useCipherProtocolWagmi = () => {
     return data ?? { principal: 0n, repaid: 0n, active: false, startTime: 0n };
   }, [loanResult.data]);
 
-  // ---------- Read: Pool Balance ----------
-  const poolBalanceResult = useReadContract({
+  // ---------- Read: Repayment Due ----------
+  const repaymentDueResult = useReadContract({
     address: hasContract ? cipher!.address : undefined,
     abi: hasContract ? cipher!.abi : undefined,
-    functionName: "getPoolBalance" as const,
-    query: { enabled: Boolean(hasContract && isConnected), refetchOnWindowFocus: false },
+    functionName: "getRepaymentDue" as const,
+    args: [address ?? "0x0"],
+    query: { enabled: Boolean(hasContract && isConnected && address && loanInfo.active), refetchOnWindowFocus: false },
   });
-  const poolBalance = useMemo(() => (poolBalanceResult.data as bigint | undefined) ?? 0n, [poolBalanceResult.data]);
+  const repaymentDue = useMemo(() => {
+    const data = repaymentDueResult.data as [bigint, bigint] | { totalDue: bigint; remaining: bigint } | undefined;
+    if (!data) return { totalDue: 0n, remaining: 0n };
+    if (Array.isArray(data)) return { totalDue: data[0], remaining: data[1] };
+    return { totalDue: data.totalDue, remaining: data.remaining };
+  }, [repaymentDueResult.data]);
 
   // ---------- Read: Tier Limit ----------
   const tierLimitResult = useReadContract({
@@ -105,6 +131,79 @@ export const useCipherProtocolWagmi = () => {
     query: { enabled: Boolean(hasContract && isConnected && userTier > 0), refetchOnWindowFocus: false },
   });
   const tierLimit = useMemo(() => (tierLimitResult.data as bigint | undefined) ?? 0n, [tierLimitResult.data]);
+
+  // ---------- Read: Pool Metrics ----------
+  const poolBalanceResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "getPoolBalance" as const,
+    query: { enabled: Boolean(hasContract && isConnected), refetchOnWindowFocus: false },
+  });
+  const poolBalance = useMemo(() => (poolBalanceResult.data as bigint | undefined) ?? 0n, [poolBalanceResult.data]);
+
+  const totalAssetsResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "getTotalAssets" as const,
+    query: { enabled: Boolean(hasContract && isConnected), refetchOnWindowFocus: false },
+  });
+  const totalAssets = useMemo(() => (totalAssetsResult.data as bigint | undefined) ?? 0n, [totalAssetsResult.data]);
+
+  const totalBorrowsResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "totalBorrows" as const,
+    query: { enabled: Boolean(hasContract && isConnected), refetchOnWindowFocus: false },
+  });
+  const totalBorrows = useMemo(() => (totalBorrowsResult.data as bigint | undefined) ?? 0n, [totalBorrowsResult.data]);
+
+  const utilizationResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "getUtilization" as const,
+    query: { enabled: Boolean(hasContract && isConnected), refetchOnWindowFocus: false },
+  });
+  const utilizationBps = useMemo(() => (utilizationResult.data as bigint | undefined) ?? 0n, [utilizationResult.data]);
+
+  const userDepositValueResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "getUserDepositValue" as const,
+    args: [address ?? "0x0"],
+    query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
+  });
+  const userDepositValue = useMemo(
+    () => (userDepositValueResult.data as bigint | undefined) ?? 0n,
+    [userDepositValueResult.data],
+  );
+
+  const userDepositsResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "deposits" as const,
+    args: [address ?? "0x0"],
+    query: { enabled: Boolean(hasContract && isConnected && address), refetchOnWindowFocus: false },
+  });
+  const userDeposits = useMemo(() => (userDepositsResult.data as bigint | undefined) ?? 0n, [userDepositsResult.data]);
+
+  const borrowFeeBpsResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "BORROW_FEE_BPS" as const,
+    query: { enabled: hasContract },
+  });
+  const borrowFeeBps = useMemo(
+    () => (borrowFeeBpsResult.data as bigint | undefined) ?? 250n,
+    [borrowFeeBpsResult.data],
+  );
+
+  const interestBpsResult = useReadContract({
+    address: hasContract ? cipher!.address : undefined,
+    abi: hasContract ? cipher!.abi : undefined,
+    functionName: "INTEREST_BPS" as const,
+    query: { enabled: hasContract },
+  });
+  const interestBps = useMemo(() => (interestBpsResult.data as bigint | undefined) ?? 500n, [interestBpsResult.data]);
 
   // ---------- Contract Balance ----------
   const { data: contractBalance } = useBalance({
@@ -122,17 +221,13 @@ export const useCipherProtocolWagmi = () => {
       if (!publicClient) return null;
       setMessage("Waiting for block confirmation...");
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status !== "success") {
-        throw new Error("Transaction reverted on-chain.");
-      }
+      if (receipt.status !== "success") throw new Error("Transaction reverted on-chain.");
       return receipt;
     },
     [publicClient],
   );
 
-  // ---------- Direct-read polling for score after submit ----------
-  // Wagmi's useReadContract can cache stale data for msg.sender-dependent view
-  // functions. We bypass the cache entirely with publicClient.readContract.
+  // ---------- Direct-read polling ----------
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startPollingScore = useCallback(() => {
     if (!publicClient || !cipher?.address || !address) return;
@@ -158,13 +253,11 @@ export const useCipherProtocolWagmi = () => {
         if (s && s !== ZERO_HANDLE) setPolledScoreHandle(s);
         if (t && t !== ZERO_HANDLE) setPolledTierHandle(t);
       } catch {
-        /* ignore RPC transient errors */
+        /* ignore */
       }
     };
 
-    // immediate attempt
     readDirect();
-
     pollRef.current = setInterval(() => {
       attempts++;
       readDirect();
@@ -181,7 +274,6 @@ export const useCipherProtocolWagmi = () => {
     };
   }, []);
 
-  // Reset polled handles when wallet changes so stale data doesn't leak
   useEffect(() => {
     setPolledScoreHandle(undefined);
     setPolledTierHandle(undefined);
@@ -219,42 +311,32 @@ export const useCipherProtocolWagmi = () => {
   const isDecrypting = decrypt.isFetching;
 
   const hasScore = Boolean(scoreHandle && scoreHandle !== ZERO_HANDLE);
-
   const canDecrypt = Boolean(hasContract && isConnected && address && hasScore && !isDecrypting && !isAllowing);
 
   useEffect(() => {
-    if (hasScore && awaitingScore) {
-      setAwaitingScore(false);
-    }
+    if (hasScore && awaitingScore) setAwaitingScore(false);
   }, [hasScore, awaitingScore]);
-
   useEffect(() => {
     setDecryptEnabled(false);
   }, [scoreHandle]);
-
   useEffect(() => {
-    if (decryptEnabled && isAllowed && isDecrypting) {
-      setMessage("Requesting decryption from KMS...");
-    }
+    if (decryptEnabled && isAllowed && isDecrypting) setMessage("Requesting decryption from KMS...");
   }, [decryptEnabled, isAllowed, isDecrypting]);
 
   const requestDecryption = useCallback(async () => {
     if (!canDecrypt) return;
     setDecryptEnabled(true);
-
     if (!isAllowed) {
       setMessage("Authorizing decryption... Check your wallet for a signature request.");
       try {
         await allowAsync([contractAddr]);
         setMessage("Authorization complete. Requesting decryption...");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setMessage(`Authorization failed: ${msg}`);
+        setMessage(`Authorization failed: ${formatError(err)}`);
         setDecryptEnabled(false);
       }
       return;
     }
-
     setMessage("Requesting decryption from KMS...");
   }, [canDecrypt, isAllowed, allowAsync, contractAddr]);
 
@@ -276,8 +358,7 @@ export const useCipherProtocolWagmi = () => {
     window.addEventListener(
       ZamaSDKEvents.DecryptError,
       (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        setMessage(`Decryption error: ${detail?.message || "Unknown error"}`);
+        setMessage(`Decryption error: ${(e as CustomEvent).detail?.message || "Unknown error"}`);
         setDecryptEnabled(false);
       },
       { signal: ctrl.signal },
@@ -298,7 +379,6 @@ export const useCipherProtocolWagmi = () => {
       try {
         let totalVolumeWei = parseEther(totalVolumeEth.toString());
         if (totalVolumeWei > MAX_EUINT64) totalVolumeWei = MAX_EUINT64;
-
         const txCountBig = BigInt(txCount) > MAX_EUINT32 ? MAX_EUINT32 : BigInt(txCount);
         const ageBig = BigInt(walletAgeDays) > MAX_EUINT32 ? MAX_EUINT32 : BigInt(walletAgeDays);
 
@@ -334,7 +414,7 @@ export const useCipherProtocolWagmi = () => {
         setAwaitingScore(true);
         startPollingScore();
       } catch (e) {
-        setMessage(`Application failed: ${e instanceof Error ? e.message : String(e)}`);
+        setMessage(`Application failed: ${formatError(e)}`);
       } finally {
         setIsProcessing(false);
       }
@@ -372,7 +452,7 @@ export const useCipherProtocolWagmi = () => {
         setMessage("Tier revealed!");
         userTierResult.refetch();
       } catch (e) {
-        setMessage(`Reveal failed: ${e instanceof Error ? e.message : String(e)}`);
+        setMessage(`Reveal failed: ${formatError(e)}`);
       } finally {
         setIsProcessing(false);
       }
@@ -387,25 +467,38 @@ export const useCipherProtocolWagmi = () => {
       setIsProcessing(true);
       setMessage("Processing loan...");
       try {
-        const amountWei = parseEther(amountEth);
         const hash = await writeContractAsync({
           address: cipher.address,
           abi: cipher.abi,
           functionName: "borrow",
-          args: [amountWei],
+          args: [parseEther(amountEth)],
           gas: 1_000_000n,
         });
         await waitForReceipt(hash);
         setMessage("Loan received!");
         loanResult.refetch();
         poolBalanceResult.refetch();
+        totalAssetsResult.refetch();
+        totalBorrowsResult.refetch();
+        utilizationResult.refetch();
       } catch (e) {
-        setMessage(`Borrow failed: ${e instanceof Error ? e.message : String(e)}`);
+        setMessage(`Borrow failed: ${formatError(e)}`);
       } finally {
         setIsProcessing(false);
       }
     },
-    [hasContract, cipher, publicClient, writeContractAsync, waitForReceipt, loanResult, poolBalanceResult],
+    [
+      hasContract,
+      cipher,
+      publicClient,
+      writeContractAsync,
+      waitForReceipt,
+      loanResult,
+      poolBalanceResult,
+      totalAssetsResult,
+      totalBorrowsResult,
+      utilizationResult,
+    ],
   );
 
   // ---------- Repay ----------
@@ -415,52 +508,122 @@ export const useCipherProtocolWagmi = () => {
       setIsProcessing(true);
       setMessage("Repaying loan...");
       try {
-        const amountWei = parseEther(amountEth);
         const hash = await writeContractAsync({
           address: cipher.address,
           abi: cipher.abi,
           functionName: "repayLoan",
-          value: amountWei,
+          value: parseEther(amountEth),
           gas: 1_000_000n,
         });
         await waitForReceipt(hash);
         setMessage("Repayment successful!");
         loanResult.refetch();
+        repaymentDueResult.refetch();
         poolBalanceResult.refetch();
+        totalAssetsResult.refetch();
+        totalBorrowsResult.refetch();
+        utilizationResult.refetch();
       } catch (e) {
-        setMessage(`Repay failed: ${e instanceof Error ? e.message : String(e)}`);
+        setMessage(`Repay failed: ${formatError(e)}`);
       } finally {
         setIsProcessing(false);
       }
     },
-    [hasContract, cipher, publicClient, writeContractAsync, waitForReceipt, loanResult, poolBalanceResult],
+    [
+      hasContract,
+      cipher,
+      publicClient,
+      writeContractAsync,
+      waitForReceipt,
+      loanResult,
+      repaymentDueResult,
+      poolBalanceResult,
+      totalAssetsResult,
+      totalBorrowsResult,
+      utilizationResult,
+    ],
   );
 
-  // ---------- Deposit Liquidity ----------
+  // ---------- Deposit ----------
   const depositLiquidity = useCallback(
     async (amountEth: string) => {
       if (!hasContract || !cipher?.address || !publicClient) return;
       setIsProcessing(true);
       setMessage("Depositing liquidity...");
       try {
-        const amountWei = parseEther(amountEth);
         const hash = await writeContractAsync({
           address: cipher.address,
           abi: cipher.abi,
           functionName: "depositLiquidity",
-          value: amountWei,
+          value: parseEther(amountEth),
           gas: 1_000_000n,
         });
         await waitForReceipt(hash);
         setMessage("Liquidity deposited!");
         poolBalanceResult.refetch();
+        totalAssetsResult.refetch();
+        userDepositValueResult.refetch();
+        userDepositsResult.refetch();
       } catch (e) {
-        setMessage(`Deposit failed: ${e instanceof Error ? e.message : String(e)}`);
+        setMessage(`Deposit failed: ${formatError(e)}`);
       } finally {
         setIsProcessing(false);
       }
     },
-    [hasContract, cipher, publicClient, writeContractAsync, waitForReceipt, poolBalanceResult],
+    [
+      hasContract,
+      cipher,
+      publicClient,
+      writeContractAsync,
+      waitForReceipt,
+      poolBalanceResult,
+      totalAssetsResult,
+      userDepositValueResult,
+      userDepositsResult,
+    ],
+  );
+
+  // ---------- Withdraw ----------
+  const withdrawLiquidity = useCallback(
+    async (amountEth: string) => {
+      if (!hasContract || !cipher?.address || !publicClient) return;
+      setIsProcessing(true);
+      setMessage("Withdrawing liquidity...");
+      try {
+        const hash = await writeContractAsync({
+          address: cipher.address,
+          abi: cipher.abi,
+          functionName: "withdrawLiquidity",
+          args: [parseEther(amountEth)],
+          gas: 1_000_000n,
+        });
+        await waitForReceipt(hash);
+        setMessage("Liquidity withdrawn!");
+        poolBalanceResult.refetch();
+        totalAssetsResult.refetch();
+        userDepositValueResult.refetch();
+        userDepositsResult.refetch();
+        totalBorrowsResult.refetch();
+        utilizationResult.refetch();
+      } catch (e) {
+        setMessage(`Withdraw failed: ${formatError(e)}`);
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [
+      hasContract,
+      cipher,
+      publicClient,
+      writeContractAsync,
+      waitForReceipt,
+      poolBalanceResult,
+      totalAssetsResult,
+      userDepositValueResult,
+      userDepositsResult,
+      totalBorrowsResult,
+      utilizationResult,
+    ],
   );
 
   return {
@@ -484,8 +647,16 @@ export const useCipherProtocolWagmi = () => {
     loanActive: loanInfo.active,
     loanPrincipal: loanInfo.principal,
     loanRepaid: loanInfo.repaid,
+    repaymentDue,
 
     poolBalance,
+    totalAssets,
+    totalBorrows,
+    utilizationBps,
+    userDepositValue,
+    userDeposits,
+    borrowFeeBps,
+    interestBps,
     contractBalance,
 
     hasScore,
@@ -502,6 +673,7 @@ export const useCipherProtocolWagmi = () => {
     borrow,
     repayLoan,
     depositLiquidity,
+    withdrawLiquidity,
     requestDecryption,
     refresh: () => {
       scoreResult.refetch();
@@ -509,7 +681,15 @@ export const useCipherProtocolWagmi = () => {
       userTierResult.refetch();
       defaultCountResult.refetch();
       loanResult.refetch();
+      repaymentDueResult.refetch();
       poolBalanceResult.refetch();
+      totalAssetsResult.refetch();
+      totalBorrowsResult.refetch();
+      utilizationResult.refetch();
+      userDepositValueResult.refetch();
+      userDepositsResult.refetch();
+      borrowFeeBpsResult.refetch();
+      interestBpsResult.refetch();
     },
   };
 };

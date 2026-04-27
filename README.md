@@ -26,16 +26,18 @@
 
 **Live Demo:** [https://cipher-fhe.vercel.app](https://cipher-fhe.vercel.app)
 
-**Contract (Sepolia):** [`0x199925101D489531B3ebD9a429345D909d056e1d`](https://sepolia.etherscan.io/address/0x199925101d489531b3ebd9a429345d909d056e1d)
+**Contract (Sepolia):** [`0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62`](https://sepolia.etherscan.io/address/0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62)
 
 **What you can do:**
 
 1. Connect your wallet on Sepolia
-2. Submit encrypted financial metrics (tx count, volume, wallet age, defaults)
+2. Submit encrypted financial metrics (tx count, volume, wallet age)
 3. Watch the smart contract compute your credit score **entirely on encrypted data**
 4. Decrypt your score and tier locally — only you ever see the number
 5. Reveal your tier to access tiered micro-loans from the community pool
-6. Deposit liquidity to earn yield from borrower repayments
+6. Borrow with a 2.5% origination fee and 5% interest
+7. Deposit liquidity to earn pro-rata yield from borrower fees and interest
+8. Withdraw your principal + accrued yield at any time
 
 ---
 
@@ -163,19 +165,28 @@ score = FHE.select(aboveMax, FHE.asEuint32(850), score);
 
 **Location:** `packages/foundry/src/CipherProtocol.sol`
 
-**Deployed Address (Sepolia):** `0x199925101D489531B3ebD9a429345D909d056e1d`
+**Deployed Address (Sepolia):** `0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62`
 
 **Core Functions:**
 
-| Function            | Description                                                                                | Gas (approx) |
-| ------------------- | ------------------------------------------------------------------------------------------ | ------------ |
-| `applyForScore`     | Accepts 4 encrypted inputs, computes weighted score via FHE, stores encrypted score + tier | ~1.9M        |
-| `getEncryptedScore` | Returns user's encrypted score handle (view)                                               | ~0           |
-| `getEncryptedTier`  | Returns user's encrypted tier handle (view)                                                | ~0           |
-| `revealTier`        | User reveals decrypted tier for on-chain borrowing                                         | ~30K         |
-| `borrow`            | Borrow ETH up to tier limit                                                                | ~120K        |
-| `repayLoan`         | Repay active loan with ETH                                                                 | ~40K         |
-| `depositLiquidity`  | Deposit ETH to lending pool                                                                | ~25K         |
+| Function            | Description                                                                          | Gas (approx) |
+| ------------------- | ------------------------------------------------------------------------------------ | ------------ |
+| `applyForScore`     | Accepts 3 encrypted inputs, reads defaults on-chain, computes weighted score via FHE | ~1.9M        |
+| `getEncryptedScore` | Returns user's encrypted score handle (view)                                         | ~0           |
+| `getEncryptedTier`  | Returns user's encrypted tier handle (view)                                          | ~0           |
+| `revealTier`        | User reveals decrypted tier for on-chain borrowing                                   | ~30K         |
+| `borrow`            | Borrow ETH up to tier limit. 2.5% origination fee retained by pool.                  | ~120K        |
+| `repayLoan`         | Repay active loan. Principal + 5% interest due to close.                             | ~40K         |
+| `depositLiquidity`  | Deposit ETH to lending pool. Earn pro-rata yield.                                    | ~25K         |
+| `withdrawLiquidity` | Withdraw ETH + accrued yield proportional to deposit share                           | ~30K         |
+| `liquidate`         | Anyone can liquidate an overdue loan (>30 days). Records default on-chain.           | ~25K         |
+
+**DeFi Economics:**
+
+- **Origination Fee:** 2.5% flat fee on every borrow (retained by pool immediately)
+- **Interest Rate:** 5% due on repayment (stays in pool)
+- **Yield Distribution:** Pro-rata based on deposit share
+- **Liquidation:** Bad debt is written off from `totalBorrows`, absorbed by depositors proportionally
 
 **Security Notes:**
 
@@ -197,7 +208,10 @@ Tests cover:
 
 - Encrypted score computation and decryption
 - Encrypted tier computation and decryption
-- Full borrow/repay flow
+- Full borrow/repay flow with fees and interest
+- Liquidation and default recording
+- Depositor yield from fees and interest
+- Partial withdrawals
 
 ---
 
@@ -223,10 +237,10 @@ The UI follows an **Apple-inspired design system** with:
 
 **Key Components:**
 
-- `ApplyPanel` — Form for encrypted credit application
-- `ScorePanel` — Encrypted score display + decrypt CTA
-- `LoanPanel` — Borrow/repay interface
-- `PoolPanel` — Liquidity deposit + pool stats
+- `ApplyPanel` — Auto-fills wallet history from Alchemy, read-only fields, submit encrypted application
+- `ScorePanel` — Encrypted score display + decrypt CTA with step indicator
+- `LoanPanel` — Borrow calculator with fee preview, repay with interest breakdown
+- `PoolPanel` — Liquidity deposit/withdraw, utilization bar, pool stats
 
 ---
 
@@ -248,8 +262,8 @@ The Cipher frontend follows an **Apple-inspired design language** documented in 
 
 ### Sepolia (Live)
 
-- **Contract:** `0x199925101D489531B3ebD9a429345D909d056e1d`
-- **Etherscan:** https://sepolia.etherscan.io/address/0x199925101d489531b3ebd9a429345d909d056e1d
+- **Contract:** `0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62`
+- **Etherscan:** https://sepolia.etherscan.io/address/0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62
 - **Network:** Sepolia Testnet (Chain ID: 11155111)
 - **Verified:** ✅
 
@@ -260,6 +274,14 @@ Create `packages/nextjs/.env.local`:
 ```bash
 NEXT_PUBLIC_ALCHEMY_API_KEY=...
 NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=...
+```
+
+Create root `.env.local` (for contract deployment):
+
+```bash
+DEPLOYER_PRIVATE_KEY=0x...
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/...
+ETHERSCAN_API_KEY=...
 ```
 
 ### Build & Deploy Frontend

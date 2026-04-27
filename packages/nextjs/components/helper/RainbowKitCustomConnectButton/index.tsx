@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Image from "next/image";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Address, formatEther } from "viem";
 import { useDisconnect } from "wagmi";
@@ -119,7 +120,7 @@ function AppleWalletButton({
 
 function WalletAvatar({ address, ensAvatar }: { address: string; ensAvatar?: string }) {
   if (ensAvatar) {
-    return <img src={ensAvatar} alt="" className="w-6 h-6 rounded-full" />;
+    return <Image src={ensAvatar} alt="" width={24} height={24} className="w-6 h-6 rounded-full" unoptimized />;
   }
   // Simple blockie-like colored circle
   const hue = parseInt(address.slice(2, 10), 16) % 360;

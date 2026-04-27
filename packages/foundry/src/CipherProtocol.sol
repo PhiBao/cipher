@@ -25,6 +25,12 @@ contract CipherProtocol is ZamaEthereumConfig {
     /// @notice Loans become eligible for liquidation after this duration.
     uint256 public constant LOAN_DURATION = 30 days;
 
+    /// @notice Flat origination fee on borrows (2.5%).
+    uint256 public constant BORROW_FEE_BPS = 250;
+    /// @notice Interest due on repayment (5%).
+    uint256 public constant INTEREST_BPS = 500;
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+
     // ============ State ============
 
     /// @notice Encrypted credit score per user (range 300-850)
@@ -49,13 +55,21 @@ contract CipherProtocol is ZamaEthereumConfig {
 
     mapping(address => Loan) public loans;
 
+    /// @notice Depositor positions (raw ETH contributed)
+    mapping(address => uint256) public deposits;
+    uint256 public totalDeposits;
+
+    /// @notice Total principal currently lent out
+    uint256 public totalBorrows;
+
     // ============ Events ============
 
     event ScoreApplied(address indexed user, bytes32 scoreHandle);
     event TierRevealed(address indexed user, uint8 tier);
-    event LoanTaken(address indexed user, uint256 amount);
+    event LoanTaken(address indexed user, uint256 principal, uint256 fee, uint256 received);
     event LoanRepaid(address indexed user, uint256 amount);
     event LiquidityDeposited(address indexed lender, uint256 amount);
+    event LiquidityWithdrawn(address indexed lender, uint256 amount);
     event DefaultRecorded(address indexed user, uint32 newDefaultCount);
 
     // ============ Credit Score Engine ============
@@ -79,15 +93,10 @@ contract CipherProtocol is ZamaEthereumConfig {
         euint64 totalVolume = FHE.fromExternal(extTotalVolume, proofVol);
         euint32 walletAgeDays = FHE.fromExternal(extWalletAgeDays, proofAge);
 
-        // Defaults are read on-chain — no user input needed
+        // Defaults are read on-chain
         euint32 defaults = FHE.asEuint32(defaultCount[msg.sender]);
 
         // --- Encrypted weighted scoring formula ---
-        // positive = txCount * 5 + (totalVolume / 1e15) * 2 + walletAgeDays * 1
-        // negative = defaults * 100
-        // raw = positive - negative (floored at 0)
-        // score = 300 + raw (capped at 850)
-
         euint32 weightedTxCount = FHE.mul(txCount, FHE.asEuint32(5));
 
         // Scale volume down by 1e15 (so 1 ETH = 1e18 wei -> 1000 points)
@@ -159,6 +168,10 @@ contract CipherProtocol is ZamaEthereumConfig {
 
     /// @notice Get the maximum loan amount for a given tier.
     function getTierLimit(uint8 tier) external pure returns (uint256) {
+        return _getTierLimit(tier);
+    }
+
+    function _getTierLimit(uint8 tier) internal pure returns (uint256) {
         if (tier == 1) return TIER_A_LIMIT;
         if (tier == 2) return TIER_B_LIMIT;
         if (tier == 3) return TIER_C_LIMIT;
@@ -174,8 +187,6 @@ contract CipherProtocol is ZamaEthereumConfig {
     // ============ Tier Revelation (Production: ZK / Gateway) ============
 
     /// @notice Reveal the user's tier.
-    /// @dev In a production deployment, this would be replaced by a ZK-proof verification
-    ///      or a gateway decryption callback that proves the tier matches the encrypted score.
     function revealTier(uint8 tier) external {
         require(tier >= 1 && tier <= 4, "Invalid tier");
         require(FHE.isAllowed(encryptedScores[msg.sender], msg.sender), "No score found");
@@ -185,61 +196,120 @@ contract CipherProtocol is ZamaEthereumConfig {
 
     // ============ Lending Pool ============
 
-    /// @notice Deposit ETH into the lending pool.
+    /// @notice Deposit ETH into the lending pool and earn pro-rata yield.
     function depositLiquidity() external payable {
         require(msg.value > 0, "Must deposit ETH");
+        deposits[msg.sender] += msg.value;
+        totalDeposits += msg.value;
         emit LiquidityDeposited(msg.sender, msg.value);
     }
 
-    /// @notice Borrow ETH up to the tier limit.
-    function borrow(uint256 amount) external {
-        uint8 tier = userTier[msg.sender];
-        require(tier > 0, "Tier not revealed");
+    /// @notice Withdraw ETH + accrued yield from the pool.
+    function withdrawLiquidity(uint256 amount) external {
+        require(totalDeposits > 0, "No deposits");
+        uint256 userDeposit = deposits[msg.sender];
+        require(userDeposit > 0, "No deposits");
 
-        uint256 limit;
-        if (tier == 1) limit = TIER_A_LIMIT;
-        else if (tier == 2) limit = TIER_B_LIMIT;
-        else if (tier == 3) limit = TIER_C_LIMIT;
-        else limit = TIER_D_LIMIT;
+        uint256 totalAssets = address(this).balance + totalBorrows;
+        uint256 userValue = (userDeposit * totalAssets) / totalDeposits;
+        require(amount <= userValue, "Exceeds position");
 
-        require(amount <= limit, "Exceeds tier limit");
-        require(!loans[msg.sender].active, "Active loan exists");
-        require(address(this).balance >= amount, "Insufficient liquidity");
-
-        loans[msg.sender] = Loan({principal: amount, repaid: 0, active: true, startTime: block.timestamp});
+        // Reduce deposit proportionally
+        uint256 depositReduction = (amount * totalDeposits) / totalAssets;
+        deposits[msg.sender] = userDeposit - depositReduction;
+        totalDeposits -= depositReduction;
 
         (bool success,) = payable(msg.sender).call{value: amount}("");
         require(success, "Transfer failed");
 
-        emit LoanTaken(msg.sender, amount);
+        emit LiquidityWithdrawn(msg.sender, amount);
     }
 
-    /// @notice Repay an active loan.
+    /// @notice Get a depositor's current position value (principal + yield).
+    function getUserDepositValue(address user) external view returns (uint256) {
+        if (totalDeposits == 0) return 0;
+        uint256 totalAssets = address(this).balance + totalBorrows;
+        return (deposits[user] * totalAssets) / totalDeposits;
+    }
+
+    /// @notice Get total assets in the pool (cash + loans outstanding).
+    function getTotalAssets() external view returns (uint256) {
+        return address(this).balance + totalBorrows;
+    }
+
+    /// @notice Get current pool utilization rate (bps).
+    function getUtilization() external view returns (uint256) {
+        uint256 totalAssets = address(this).balance + totalBorrows;
+        if (totalAssets == 0) return 0;
+        return (totalBorrows * BPS_DENOMINATOR) / totalAssets;
+    }
+
+    // ============ Borrowing ============
+
+    /// @notice Borrow ETH up to the tier limit. A 2.5% origination fee is retained by the pool.
+    function borrow(uint256 amount) external {
+        uint8 tier = userTier[msg.sender];
+        require(tier > 0, "Tier not revealed");
+
+        uint256 limit = _getTierLimit(tier);
+        require(amount <= limit, "Exceeds tier limit");
+        require(!loans[msg.sender].active, "Active loan exists");
+
+        uint256 totalAssets = address(this).balance + totalBorrows;
+        require(amount <= totalAssets, "Insufficient liquidity");
+
+        uint256 fee = (amount * BORROW_FEE_BPS) / BPS_DENOMINATOR;
+        uint256 disburse = amount - fee;
+
+        loans[msg.sender] = Loan({principal: amount, repaid: 0, active: true, startTime: block.timestamp});
+
+        totalBorrows += amount;
+
+        (bool success,) = payable(msg.sender).call{value: disburse}("");
+        require(success, "Transfer failed");
+
+        emit LoanTaken(msg.sender, amount, fee, disburse);
+    }
+
+    /// @notice Repay an active loan. Must repay principal + 5% interest to close.
     function repayLoan() external payable {
         Loan storage loan = loans[msg.sender];
         require(loan.active, "No active loan");
         require(msg.value > 0, "Must repay something");
 
+        uint256 interest = (loan.principal * INTEREST_BPS) / BPS_DENOMINATOR;
+        uint256 totalDue = loan.principal + interest;
+
         uint256 newRepaid = loan.repaid + msg.value;
-        // Cap repayment at 2x principal (100% interest ceiling for demo)
-        require(newRepaid <= loan.principal * 2, "Overpayment");
+        // Cap overpayment at 2x total due for safety
+        require(newRepaid <= totalDue * 2, "Overpayment");
 
         loan.repaid = newRepaid;
-        if (loan.repaid >= loan.principal) {
+        if (loan.repaid >= totalDue) {
             loan.active = false;
+            totalBorrows -= loan.principal;
         }
 
         emit LoanRepaid(msg.sender, msg.value);
     }
 
+    /// @notice Get the total amount required to fully repay an active loan.
+    function getRepaymentDue(address borrower) external view returns (uint256 totalDue, uint256 remaining) {
+        Loan storage loan = loans[borrower];
+        if (!loan.active) return (0, 0);
+        uint256 interest = (loan.principal * INTEREST_BPS) / BPS_DENOMINATOR;
+        totalDue = loan.principal + interest;
+        remaining = totalDue > loan.repaid ? totalDue - loan.repaid : 0;
+    }
+
     /// @notice Liquidate an overdue loan and record a default.
-    /// @dev Anyone can call this after LOAN_DURATION has passed.
     function liquidate(address borrower) external {
         Loan storage loan = loans[borrower];
         require(loan.active, "No active loan");
         require(block.timestamp > loan.startTime + LOAN_DURATION, "Loan not overdue");
 
         loan.active = false;
+        totalBorrows -= loan.principal; // bad debt written off; depositors absorb loss
         defaultCount[borrower]++;
 
         emit DefaultRecorded(borrower, defaultCount[borrower]);
@@ -250,7 +320,7 @@ contract CipherProtocol is ZamaEthereumConfig {
         return loans[user];
     }
 
-    /// @notice Get total ETH available in the pool.
+    /// @notice Get total ETH cash reserves (not including loans).
     function getPoolBalance() external view returns (uint256) {
         return address(this).balance;
     }

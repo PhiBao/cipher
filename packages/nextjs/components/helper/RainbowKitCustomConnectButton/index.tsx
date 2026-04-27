@@ -19,10 +19,12 @@ function AppleWalletButton({
   account,
   chain,
   openConnectModal,
+  openChainModal,
 }: {
   account?: { address: string; displayName: string; ensAvatar?: string };
   chain?: { id: number; name?: string; unsupported?: boolean };
   openConnectModal: () => void;
+  openChainModal?: () => void;
 }) {
   const { disconnect } = useDisconnect();
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -43,10 +45,10 @@ function AppleWalletButton({
   if (chain.unsupported) {
     return (
       <button
-        onClick={openConnectModal}
+        onClick={openChainModal ?? openConnectModal}
         className="bg-red-600 text-white text-sm font-medium rounded-full px-5 py-2 transition-transform active:scale-95"
       >
-        Wrong Network
+        Wrong Network — Click to Switch
       </button>
     );
   }
@@ -150,9 +152,16 @@ function WalletBalance({ address }: { address: Address }) {
 export const RainbowKitCustomConnectButton = () => {
   return (
     <ConnectButton.Custom>
-      {({ account, chain, openConnectModal, mounted }) => {
+      {({ account, chain, openConnectModal, openChainModal, mounted }) => {
         if (!mounted) return null;
-        return <AppleWalletButton account={account} chain={chain} openConnectModal={openConnectModal} />;
+        return (
+          <AppleWalletButton
+            account={account}
+            chain={chain}
+            openConnectModal={openConnectModal}
+            openChainModal={openChainModal}
+          />
+        );
       }}
     </ConnectButton.Custom>
   );

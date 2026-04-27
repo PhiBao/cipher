@@ -11,6 +11,7 @@ import { Toaster } from "react-hot-toast";
 import { WagmiProvider } from "wagmi";
 import { Header } from "~~/components/Header";
 import { BlockieAvatar } from "~~/components/helper";
+import { useAutoSwitchNetwork } from "~~/hooks/helper/useAutoSwitchNetwork";
 import { wagmiConfig } from "~~/services/web3/wagmiConfig";
 import { WagmiSigner } from "~~/services/web3/wagmiSigner";
 
@@ -61,6 +62,11 @@ const ZamaRuntimeProvider = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
+function AutoSwitchNetwork() {
+  useAutoSwitchNetwork();
+  return null;
+}
+
 export const DappWrapperWithProviders = ({ children }: { children: React.ReactNode }) => {
   const { resolvedTheme } = useTheme();
   const isDarkMode = resolvedTheme === "dark";
@@ -78,6 +84,7 @@ export const DappWrapperWithProviders = ({ children }: { children: React.ReactNo
           theme={mounted ? (isDarkMode ? darkTheme() : lightTheme()) : lightTheme()}
         >
           <ZamaRuntimeProvider>
+            <AutoSwitchNetwork />
             <ProgressBar height="3px" color="#0066cc" />
             <div className={`flex flex-col min-h-screen`}>
               <Header />

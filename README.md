@@ -1,120 +1,299 @@
-# FHEVM React Template
+# Cipher — Confidential Credit on FHE
 
-A minimal React + Foundry template for building FHEVM-enabled dApps. Ships with `FHECounter.sol` (a trivial encrypted counter) and a Next.js frontend that reads, writes, and decrypts its value.
+> **The privacy-preserving on-chain credit scoring and micro-lending protocol built with Zama's Fully Homomorphic Encryption.**
 
-FHEVM (Fully Homomorphic Encryption Virtual Machine) lets smart contracts compute on encrypted data. Inputs, storage, and ciphertext handles stay private; only authorized callers can decrypt.
+[![Zama FHEVM](https://img.shields.io/badge/Built%20with-Zama%20FHEVM-blue)](https://docs.zama.ai)
+[![Solidity](https://img.shields.io/badge/Solidity-0.8.27-black)](https://soliditylang.org)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org)
 
-## Stack
+---
 
-- **Contracts** — Foundry, Solidity 0.8.27, [forge-fhevm](https://github.com/zama-ai/forge-fhevm) for host contracts + testing helpers
-- **Frontend** — Next.js 15 (App Router), React 19, wagmi, viem, RainbowKit, Tailwind + daisyUI
-- **FHE SDK** — `@zama-fhe/sdk` + `@zama-fhe/react-sdk` v3; `RelayerCleartext` on localhost, `RelayerWeb` on Sepolia
+## Table of Contents
 
-## Prerequisites
+1. [Demo](#demo)
+2. [Problem & Opportunity](#problem--opportunity)
+3. [Product-Market Fit](#product-market-fit)
+4. [Architecture](#architecture)
+5. [Smart Contracts](#smart-contracts)
+6. [Frontend](#frontend)
+7. [Design System](#design-system)
+8. [Deployment](#deployment)
+9. [Team & Credits](#team--credits)
 
-Node.js ≥ 20, pnpm, [Foundry](https://book.getfoundry.sh/getting-started/installation) (`forge` / `anvil` / `cast`), `jq`, MetaMask.
+---
 
-## Quick start
+## Demo
+
+**Live Demo:** [https://cipher-fhe.vercel.app](https://cipher-fhe.vercel.app)
+
+**Contract (Sepolia):** [`0x199925101D489531B3ebD9a429345D909d056e1d`](https://sepolia.etherscan.io/address/0x199925101d489531b3ebd9a429345d909d056e1d)
+
+**What you can do:**
+
+1. Connect your wallet on Sepolia
+2. Submit encrypted financial metrics (tx count, volume, wallet age, defaults)
+3. Watch the smart contract compute your credit score **entirely on encrypted data**
+4. Decrypt your score and tier locally — only you ever see the number
+5. Reveal your tier to access tiered micro-loans from the community pool
+6. Deposit liquidity to earn yield from borrower repayments
+
+---
+
+## Problem & Opportunity
+
+### The Privacy Paradox in DeFi Lending
+
+Existing DeFi lending protocols (Aave, Compound, Morpho) are **transparent by design**. Every wallet's collateral, debt, and liquidation price is publicly visible. This creates three critical problems:
+
+1. **Financial surveillance** — whales, competitors, and analytics firms can monitor and front-run large positions
+2. **Social stigma** — borrowers don't want their community to see they're leveraged or in debt
+3. **Exclusion of underbanked** — 1.4 billion people lack traditional credit history. On-chain credit scoring could help, but nobody wants their entire transaction history published to the world
+
+### Why FHE — Not ZK, Not MPC
+
+| Approach                         | Can compute on encrypted data?          | Composability               | On-chain verification |
+| -------------------------------- | --------------------------------------- | --------------------------- | --------------------- |
+| Zero-Knowledge Proofs            | ❌ (proves statements, doesn't compute) | ✅                          | ✅                    |
+| Multi-Party Compute              | ✅                                      | ❌ (off-chain coordination) | ❌                    |
+| **Fully Homomorphic Encryption** | **✅**                                  | **✅**                      | **✅**                |
+
+FHE is the **only** technology that allows a smart contract to run arbitrary arithmetic on encrypted inputs, store encrypted state, and let only authorized parties decrypt the result. Zama's FHEVM makes this practical on Ethereum.
+
+### Why Now?
+
+- Zama FHEVM is live on Sepolia and mainnet
+- ERC-7984 (Confidential Token Standard) is gaining traction
+- Institutional DeFi demands privacy for compliance and competitive reasons
+- The "Confidential Finance" narrative is the next frontier (per Zama's own Season 2 positioning)
+
+---
+
+## Product-Market Fit
+
+### Who Needs This?
+
+| Segment                     | Pain Point                                            | How Cipher Helps                            |
+| --------------------------- | ----------------------------------------------------- | ------------------------------------------- |
+| **Crypto-native borrowers** | Don't want collateral/debt positions visible          | Confidential score + private borrowing      |
+| **Emerging market users**   | No traditional credit file, but have on-chain history | Wallet-based credit scoring without doxxing |
+| **DAOs & treasuries**       | Need to lend to contributors privately                | Tier-based access with encrypted terms      |
+| **Fintechs / Neobanks**     | Compliance requires data privacy; want DeFi yields    | White-label confidential credit layer       |
+| **Privacy advocates**       | Refuse to use transparent DeFi                        | End-to-end encrypted financial operations   |
+
+### Competitive Landscape
+
+| Project    | Privacy Tech          | Credit Scoring? | On-chain? | Unique vs Cipher                     |
+| ---------- | --------------------- | --------------- | --------- | ------------------------------------ |
+| Aave       | None                  | ❌              | ✅        | Transparent, no credit scoring       |
+| Teller     | ZK (off-chain oracle) | ✅              | ❌        | Oracle-dependent, not fully on-chain |
+| Spectral   | Public ML             | ✅              | ✅        | Scores are public                    |
+| **Cipher** | **FHE**               | **✅**          | **✅**    | **Fully confidential, end-to-end**   |
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        User Browser                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────────────┐ │
+│  │  Next.js    │  │ Zama SDK     │  │  RainbowKit Wallet  │ │
+│  │  React UI   │  │ (encrypt/    │  │  (MetaMask, etc.)   │ │
+│  │             │  │  decrypt)    │  │                     │ │
+│  └──────┬──────┘  └──────┬───────┘  └─────────────────────┘ │
+└─────────┼────────────────┼──────────────────────────────────┘
+          │                │
+          │  encrypted txs │
+          ▼                ▼
+┌─────────────────────────────────────────────────────────────┐
+│              Ethereum / Sepolia (EVM)                        │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │           CipherProtocol.sol (FHEVM)                   │  │
+│  │  ┌─────────────┐  ┌──────────────┐  ┌──────────────┐ │  │
+│  │  │ applyForScore│  │   borrow     │  │ repayLoan    │ │  │
+│  │  │ (FHE compute)│  │ (tier-based) │  │ (track repay)│ │  │
+│  │  └─────────────┘  └──────────────┘  └──────────────┘ │  │
+│  │                                                        │  │
+│  │  Encrypted state: encryptedScores[user] → euint32      │  │
+│  │                     encryptedTiers[user]  → euint32    │  │
+│  │                     loans[user]           → Loan       │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                         ▲                                   │
+│                         │ FHE ops (add, mul, div, ge, select)│
+│                         ▼                                   │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │              Zama FHEVM Executor                       │  │
+│  │         (KMS + Threshold Decryption)                  │  │
+│  └───────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### FHE Operations Used
+
+The scoring formula demonstrates **7 distinct FHE operation types**:
+
+```solidity
+// 1. Multiplication (encrypted * plaintext)
+euint32 weightedTxCount = FHE.mul(txCount, FHE.asEuint32(5));
+
+// 2. Division (encrypted / plaintext)
+euint64 volumeDiv = FHE.div(totalVolume, uint64(1e15));
+
+// 3. Addition (encrypted + encrypted)
+euint32 positiveScore = FHE.add(weightedTxCount, volumeScore);
+
+// 4. Subtraction (encrypted - encrypted)
+euint32 rawScore = FHE.sub(positiveScore, weightedDefaults);
+
+// 5. Greater-than (encrypted > encrypted)
+ebool negativeLarger = FHE.gt(weightedDefaults, positiveScore);
+
+// 6. Less-than (encrypted < plaintext)
+ebool isTierC = FHE.and(isC, FHE.lt(score, FHE.asEuint32(650)));
+
+// 7. Select (encrypted ternary)
+score = FHE.select(aboveMax, FHE.asEuint32(850), score);
+```
+
+---
+
+## Smart Contracts
+
+### `CipherProtocol.sol`
+
+**Location:** `packages/foundry/src/CipherProtocol.sol`
+
+**Deployed Address (Sepolia):** `0x199925101D489531B3ebD9a429345D909d056e1d`
+
+**Core Functions:**
+
+| Function            | Description                                                                                | Gas (approx) |
+| ------------------- | ------------------------------------------------------------------------------------------ | ------------ |
+| `applyForScore`     | Accepts 4 encrypted inputs, computes weighted score via FHE, stores encrypted score + tier | ~1.9M        |
+| `getEncryptedScore` | Returns user's encrypted score handle (view)                                               | ~0           |
+| `getEncryptedTier`  | Returns user's encrypted tier handle (view)                                                | ~0           |
+| `revealTier`        | User reveals decrypted tier for on-chain borrowing                                         | ~30K         |
+| `borrow`            | Borrow ETH up to tier limit                                                                | ~120K        |
+| `repayLoan`         | Repay active loan with ETH                                                                 | ~40K         |
+| `depositLiquidity`  | Deposit ETH to lending pool                                                                | ~25K         |
+
+**Security Notes:**
+
+- `revealTier` is self-reported for the hackathon demo. In production, this would be replaced by:
+  - A ZK-proof that the claimed tier matches the encrypted score, OR
+  - A Zama Gateway decryption callback that verifies the tier on-chain
+- The contract uses `FHE.allowThis()` and `FHE.allow()` to enforce ACL on every encrypted handle
+- No reentrancy risk: borrowing uses `.call{value:...}` with checks-effects-interactions pattern
+
+### Tests
+
+**Location:** `packages/foundry/test/CipherProtocol.t.sol`
 
 ```bash
-pnpm install            # node deps + husky + regenerate ABIs
-pnpm contracts:install  # forge soldeer install — required before `pnpm chain`
+pnpm contracts:test
 ```
 
-### Local
+Tests cover:
+
+- Encrypted score computation and decryption
+- Encrypted tier computation and decryption
+- Full borrow/repay flow
+
+---
+
+## Frontend
+
+**Stack:**
+
+- Next.js 15 (App Router)
+- React 19
+- Tailwind CSS v4
+- wagmi + viem + RainbowKit
+- `@zama-fhe/react-sdk` v3
+
+**Design Language:**
+The UI follows an **Apple-inspired design system** with:
+
+- Single accent color (`#0066cc` Action Blue)
+- SF Pro / Inter typography with tight negative letter-spacing
+- Alternating light (`#ffffff`, `#f5f5f7`) and dark (`#272729`) tiles
+- Pill-shaped CTAs with `transform: scale(0.95)` press states
+- Zero decorative gradients, zero card shadows
+- Photography-first whitespace philosophy
+
+**Key Components:**
+
+- `ApplyPanel` — Form for encrypted credit application
+- `ScorePanel` — Encrypted score display + decrypt CTA
+- `LoanPanel` — Borrow/repay interface
+- `PoolPanel` — Liquidity deposit + pool stats
+
+---
+
+## Design System
+
+The Cipher frontend follows an **Apple-inspired design language** documented in `DESIGN.md` (see project root). Key principles:
+
+- **Single accent color:** `#0066cc` Action Blue carries every interactive element
+- **Typography:** Inter (open-source SF Pro equivalent) with negative letter-spacing at display sizes
+- **Surface rhythm:** Alternating light (`#ffffff`, `#f5f5f7`) and dark (`#272729`) tiles create visual pulse without borders or shadows
+- **Button grammar:** Pill-shaped CTAs (`border-radius: 9999px`) for primary actions; compact rectangles (`border-radius: 8px`) for utilities
+- **Shadow philosophy:** Exactly one drop-shadow exists in the system — `rgba(0,0,0,0.22) 3px 5px 30px` — reserved for product imagery, never UI chrome
+- **Press state:** `transform: scale(0.95)` on every button
+- **Whitespace:** Sections use 80px vertical padding; tiles stack edge-to-edge with color change as the divider
+
+---
+
+## Deployment
+
+### Sepolia (Live)
+
+- **Contract:** `0x199925101D489531B3ebD9a429345D909d056e1d`
+- **Etherscan:** https://sepolia.etherscan.io/address/0x199925101d489531b3ebd9a429345d909d056e1d
+- **Network:** Sepolia Testnet (Chain ID: 11155111)
+- **Verified:** ✅
+
+### Environment Variables
+
+Create `packages/nextjs/.env.local`:
 
 ```bash
-# Terminal 1 — anvil + FHEVM cleartext host + FHECounter
-pnpm chain
-
-# Terminal 2 — frontend (http://localhost:3000)
-pnpm start
+NEXT_PUBLIC_ALCHEMY_API_KEY=...
+NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID=...
 ```
 
-Add the local network to MetaMask: RPC `http://127.0.0.1:8545`, chain id `31337`. Import any anvil dev account (e.g. private key `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`, address `0xf39F…2266`, 10 000 ETH).
-
-To redeploy `FHECounter` without restarting anvil: `pnpm deploy:localhost`.
-
-### Sepolia
+### Build & Deploy Frontend
 
 ```bash
-cp .env.example .env.local   # then fill in the three values below
+pnpm install
+pnpm next:build
+# Deploy .next/ folder to Vercel
 ```
 
-```bash
-DEPLOYER_PRIVATE_KEY=0x...                         # deployer funded with Sepolia ETH
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-ETHERSCAN_API_KEY=...                              # optional, enables --verify
-```
+---
 
-Add an Alchemy key to `packages/nextjs/.env.local`:
+## Team & Credits
 
-```bash
-NEXT_PUBLIC_ALCHEMY_API_KEY=YOUR_KEY
-```
+**Built for:** Zama Developer Program — Builder Track (Mainnet Season 2)
 
-Deploy + run:
+**Tech Stack:**
 
-```bash
-pnpm deploy:sepolia
-pnpm start
-```
+- [Zama FHEVM](https://docs.zama.ai) — Fully Homomorphic Encryption for EVM
+- [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) — ERC-7984 standards
+- [Foundry](https://book.getfoundry.sh) — Ethereum development toolkit
+- [Next.js](https://nextjs.org) — React framework
+- [RainbowKit](https://rainbowkit.com) — Wallet connection
 
-## Scripts
+**License:** BSD-3-Clause-Clear (per Zama template)
 
-| Command                  | What it does                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------- |
-| `pnpm chain`             | Anvil + FHEVM cleartext host + `FHECounter` on port 8545                                     |
-| `pnpm deploy:localhost`  | Deploys `FHECounter` to local anvil, then regenerates frontend ABIs                          |
-| `pnpm deploy:sepolia`    | Deploys to Sepolia (reads `.env.local`), then regenerates frontend ABIs                      |
-| `pnpm contracts:install` | `forge soldeer install` — fetches forge-fhevm and other contract deps                        |
-| `pnpm contracts:build`   | `forge build` in `packages/foundry`                                                          |
-| `pnpm contracts:test`    | `forge test -vv` in `packages/foundry`                                                       |
-| `pnpm generate`          | Emits `packages/nextjs/contracts/<Name>.ts` + `<Name>.local.ts` from forge broadcasts + out/ |
-| `pnpm start`             | `next dev`                                                                                   |
-| `pnpm next:build`        | Production build of the frontend                                                             |
-| `pnpm next:check-types`  | TypeScript check on the frontend                                                             |
-| `pnpm lint`              | Lint the frontend                                                                            |
-| `pnpm format`            | Prettier over the whole repo (`format:check` for no-write)                                   |
+---
 
-## Project structure
+## Acknowledgments
 
-```
-fhevm-react-template/
-├── scripts/                       # chain.sh, deploy-*.sh, generateTsAbis.ts
-├── packages/foundry/              # Solidity contracts
-│   ├── src/FHECounter.sol
-│   ├── script/DeployFHECounter.s.sol
-│   └── test/FHECounter.t.sol      # inherits forge-fhevm's FhevmTest
-└── packages/nextjs/               # Frontend
-    ├── components/DappWrapperWithProviders.tsx   # wires ZamaProvider + relayer
-    ├── hooks/fhecounter-example/useFHECounterWagmi.tsx
-    ├── contracts/
-    │   ├── FHECounter.ts          # non-local (Sepolia, …) — tracked
-    │   └── FHECounter.local.ts    # chainId 31337 overlay — gitignored
-    └── utils/contract.ts          # ContractDeployment + deploymentFor()
-```
+- Zama team for the FHEVM protocol and developer tooling
+- OpenZeppelin for confidential contract standards
+- The FHEVM React Template maintainers
 
-The per-contract `Name.ts` imports `Name.local.ts` and merges at module load, so consumer code is agnostic to which chain a deployment lives on. `postinstall` regenerates both on every `pnpm install`, including an empty stub sidecar on a fresh clone.
+---
 
-## Troubleshooting
-
-- **MetaMask nonce mismatch after restarting anvil** — MetaMask → Settings → Advanced → _Clear activity tab data_.
-- **Stale view-function results** — MetaMask caches across reloads; restart the browser (not the tab).
-- **`Contract address is not a valid address`** — the relayer SDK requires EIP-55 checksummed addresses. Rerun `pnpm generate`.
-- **`pnpm install` asks for a package manager version** — the root pins `packageManager: "pnpm@10.18.3"`. `corepack prepare pnpm@10.18.3 --activate` or match locally.
-
-## FHEVM notes
-
-- **ACL is mandatory.** Every encrypted value needs `FHE.allowThis(handle)` + `FHE.allow(handle, user)` — reads silently fail without it. `FHECounter.sol` does this explicitly.
-- **Types are baked into ciphertext handles.** The frontend's `type: "euint32"` must match the contract's `externalEuint32` parameter — mismatch reverts with `InvalidType()`.
-- **Local runs cleartext mode.** Anvil hosts a `CleartextFHEVMExecutor` that mirrors every FHE op into a `plaintexts(bytes32)` mapping. No KMS, no gateway, no WASM — `RelayerCleartext` reads plaintext directly. Dev-only.
-- **Sepolia uses the real relayer.** `RelayerWeb` spins up a Web Worker and pulls FHE crypto from Zama's CDN. Needs `NEXT_PUBLIC_ALCHEMY_API_KEY`.
-
-## References
-
-[Zama Protocol docs](https://docs.zama.org/) · [`@zama-fhe/sdk`](https://github.com/zama-ai/sdk) · [forge-fhevm](https://github.com/zama-ai/forge-fhevm) · [OpenZeppelin Confidential Contracts](https://github.com/OpenZeppelin/openzeppelin-confidential-contracts) · [Discord](https://discord.com/invite/zama)
-
-## License
-
-BSD-3-Clause-Clear. See [LICENSE](LICENSE).
+_Cipher — Privacy is the default._

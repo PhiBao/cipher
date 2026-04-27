@@ -6,6 +6,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { Address, formatEther } from "viem";
 import { useDisconnect } from "wagmi";
 import { useOutsideClick } from "~~/hooks/helper";
+import { useForceSwitchNetwork } from "~~/hooks/helper/useForceSwitchNetwork";
 import { useWatchBalance } from "~~/hooks/helper/useWatchBalance";
 import { getTargetNetworks } from "~~/utils/helper";
 
@@ -19,19 +20,31 @@ function AppleWalletButton({
   account,
   chain,
   openConnectModal,
-  openChainModal,
 }: {
   account?: { address: string; displayName: string; ensAvatar?: string };
   chain?: { id: number; name?: string; unsupported?: boolean };
   openConnectModal: () => void;
-  openChainModal?: () => void;
 }) {
   const { disconnect } = useDisconnect();
+  const { needsSwitch, forceSwitchToSepolia } = useForceSwitchNetwork();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   useOutsideClick(dropdownRef, () => setOpen(false));
 
+  const isUnsupported = chain?.unsupported ?? false;
+
   if (!account || !chain || !chain.name) {
+    // Disconnected state — but wallet may still be on wrong chain
+    if (needsSwitch) {
+      return (
+        <button
+          onClick={forceSwitchToSepolia}
+          className="bg-amber-500 text-white text-sm font-medium rounded-full px-5 py-2 transition-transform active:scale-95"
+        >
+          Switch to Sepolia
+        </button>
+      );
+    }
     return (
       <button
         onClick={openConnectModal}
@@ -42,13 +55,13 @@ function AppleWalletButton({
     );
   }
 
-  if (chain.unsupported) {
+  if (isUnsupported) {
     return (
       <button
-        onClick={openChainModal ?? openConnectModal}
+        onClick={forceSwitchToSepolia}
         className="bg-red-600 text-white text-sm font-medium rounded-full px-5 py-2 transition-transform active:scale-95"
       >
-        Wrong Network — Click to Switch
+        Wrong Network — Switch to Sepolia
       </button>
     );
   }
@@ -152,16 +165,9 @@ function WalletBalance({ address }: { address: Address }) {
 export const RainbowKitCustomConnectButton = () => {
   return (
     <ConnectButton.Custom>
-      {({ account, chain, openConnectModal, openChainModal, mounted }) => {
+      {({ account, chain, openConnectModal, mounted }) => {
         if (!mounted) return null;
-        return (
-          <AppleWalletButton
-            account={account}
-            chain={chain}
-            openConnectModal={openConnectModal}
-            openChainModal={openChainModal}
-          />
-        );
+        return <AppleWalletButton account={account} chain={chain} openConnectModal={openConnectModal} />;
       }}
     </ConnectButton.Custom>
   );

@@ -7,7 +7,7 @@ import { getMetadata } from "~~/utils/helper/getMetadata";
 export const metadata = getMetadata({
   title: "Cipher — Confidential Credit on FHE",
   description:
-    "The privacy-preserving on-chain credit scoring and micro-lending protocol built with Zama's Fully Homomorphic Encryption.",
+    "The privacy-preserving onchain credit scoring and micro-lending protocol built with Zama's Fully Homomorphic Encryption.",
 });
 
 const DappWrapper = ({ children }: { children: React.ReactNode }) => {

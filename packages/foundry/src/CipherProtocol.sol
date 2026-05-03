@@ -5,7 +5,7 @@ import {FHE, euint32, euint64, ebool, externalEuint32, externalEuint64} from "@f
 import {ZamaEthereumConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 
 /// @title CipherProtocol
-/// @notice Confidential on-chain credit scoring and micro-lending powered by FHE.
+/// @notice Confidential onchain credit scoring and micro-lending powered by FHE.
 /// @dev Users submit encrypted financial metrics; the protocol computes a credit score
 ///      entirely on encrypted data. Based on the score tier, users access tiered loans.
 ///      In production, tier revelation would be verified via ZK-proof or gateway callback.
@@ -43,7 +43,7 @@ contract CipherProtocol is ZamaEthereumConfig {
     /// In production this would be set via ZK verification or gateway decryption callback.
     mapping(address => uint8) public userTier;
 
-    /// @notice Number of recorded defaults per user (on-chain verifiable)
+    /// @notice Number of recorded defaults per user (onchain verifiable)
     mapping(address => uint32) public defaultCount;
 
     struct Loan {
@@ -75,7 +75,7 @@ contract CipherProtocol is ZamaEthereumConfig {
     // ============ Credit Score Engine ============
 
     /// @notice Apply for a confidential credit score.
-    /// @param extTxCount Encrypted number of on-chain transactions
+    /// @param extTxCount Encrypted number of onchain transactions
     /// @param extTotalVolume Encrypted total transaction volume (wei)
     /// @param extWalletAgeDays Encrypted wallet age in days
     /// @param proofTx Zama input proof for txCount
@@ -93,7 +93,7 @@ contract CipherProtocol is ZamaEthereumConfig {
         euint64 totalVolume = FHE.fromExternal(extTotalVolume, proofVol);
         euint32 walletAgeDays = FHE.fromExternal(extWalletAgeDays, proofAge);
 
-        // Defaults are read on-chain
+        // Defaults are read onchain
         euint32 defaults = FHE.asEuint32(defaultCount[msg.sender]);
 
         // --- Encrypted weighted scoring formula ---

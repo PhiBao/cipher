@@ -198,7 +198,7 @@ const ApplyPanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWag
 
       {!history.isScanned && !history.isLoading && (
         <div className="mb-4 bg-apple-blue/10 border border-apple-blue/30 rounded-lg px-4 py-2">
-          <p className="text-caption text-apple-blue">Click Refresh to load your on-chain history from Alchemy.</p>
+          <p className="text-caption text-apple-blue">Click Refresh to load your onchain history from Alchemy.</p>
         </div>
       )}
 
@@ -223,8 +223,7 @@ const ApplyPanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWag
         </div>
         <div>
           <label className="text-caption text-white/60 block mb-2">
-            Defaults{" "}
-            <InfoTooltip text="Recorded on-chain when a loan is liquidated after 30 days overdue. Read-only." />
+            Defaults <InfoTooltip text="Recorded onchain when a loan is liquidated after 30 days overdue. Read-only." />
           </label>
           <input type="number" value={cipher.defaultCount} readOnly className={inputBase} />
         </div>
@@ -253,7 +252,7 @@ const ScorePanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWag
     <div className="bg-apple-tile-2 rounded-2xl p-6 md:p-8">
       <div className="mb-2">
         <h3 className="text-tagline text-white">My Credit Score</h3>
-        <p className="text-caption text-white/50 mt-1">Confidential score computed on-chain</p>
+        <p className="text-caption text-white/50 mt-1">Confidential score computed onchain</p>
       </div>
       <StepIndicator steps={["Apply", "Decrypt", "Reveal"]} current={stepIndex} />
 
@@ -272,7 +271,7 @@ const ScorePanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWag
           </div>
           <p className="text-body text-white/60 mb-2">Encrypted score arriving...</p>
           <p className="text-caption text-white/40">
-            Your score is being written on-chain. This may take a few seconds.
+            Your score is being written onchain. This may take a few seconds.
           </p>
         </div>
       ) : !hasScore ? (
@@ -352,7 +351,7 @@ const ScorePanel = ({ cipher }: { cipher: ReturnType<typeof useCipherProtocolWag
                 onClick={() => cipher.revealTier(Number(cipher.decryptedTier))}
                 disabled={cipher.isProcessing}
               >
-                Reveal Tier On-Chain
+                Reveal Tier Onchain
               </PillButton>
             )}
           </div>
@@ -602,7 +601,7 @@ export default function Home() {
           <h1 className="text-hero mb-4">Cipher</h1>
           <p className="text-lead text-white/90 mb-2">Confidential credit. Built on FHE.</p>
           <p className="text-body text-white/60 max-w-xl mx-auto mb-8">
-            The first privacy-preserving on-chain credit scoring and micro-lending protocol. Your financial data stays
+            The privacy-preserving onchain credit scoring and micro-lending protocol. Your financial data stays
             encrypted—even while the protocol computes your score.
           </p>
           <div className="flex items-center justify-center gap-4">
@@ -791,8 +790,8 @@ export default function Home() {
             Credit scoring should not require surrendering your entire financial history to a black box.
           </p>
           <p className="text-body text-white/60">
-            Cipher is a step toward a world where on-chain reputation is private by default—where lenders can assess
-            risk without seeing raw data, and where borrowers retain sovereignty over their financial identity. Fully
+            Cipher is a step toward a world where onchain reputation is private by default—where lenders can assess risk
+            without seeing raw data, and where borrowers retain sovereignty over their financial identity. Fully
             Homomorphic Encryption is the key that unlocks this future.
           </p>
         </div>

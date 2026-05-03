@@ -221,7 +221,7 @@ export const useCipherProtocolWagmi = () => {
       if (!publicClient) return null;
       setMessage("Waiting for block confirmation...");
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      if (receipt.status !== "success") throw new Error("Transaction reverted on-chain.");
+      if (receipt.status !== "success") throw new Error("Transaction reverted onchain.");
       return receipt;
     },
     [publicClient],
@@ -412,7 +412,7 @@ export const useCipherProtocolWagmi = () => {
 
         setMessage("Transaction sent. Waiting for confirmation...");
         await waitForReceipt(hash);
-        setMessage("Score application confirmed! Your encrypted score is now on-chain.");
+        setMessage("Score application confirmed! Your encrypted score is now onchain.");
         setAwaitingScore(true);
         startPollingScore();
       } catch (e) {

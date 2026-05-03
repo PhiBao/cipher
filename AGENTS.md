@@ -4,7 +4,7 @@
 
 - **Name:** Cipher
 - **Tagline:** Confidential credit. Built on FHE.
-- **Type:** Privacy-preserving on-chain credit scoring + micro-lending dApp
+- **Type:** Privacy-preserving onchain credit scoring + micro-lending dApp
 - **Target:** Zama Developer Program (Builder Track, Mainnet Season 2)
 - **Deadline:** May 10, 2026
 
@@ -51,7 +51,7 @@ After `applyForScore`, wagmi's cache may not update for `msg.sender`-dependent r
 
 All write functions in the hook use a `formatError()` helper that detects user rejection patterns (`"user rejected"`, `"request denied"`, `"cancelled"`) and surfaces clean messages instead of raw stack traces.
 
-### Defaults Are On-Chain
+### Defaults Are Onchain
 
 The contract reads `defaultCount[msg.sender]` inside `applyForScore` via `FHE.asEuint32(defaultCount[msg.sender])`. The frontend does NOT pass defaults as an encrypted input.
 
@@ -98,5 +98,5 @@ pnpm run build
 
 - **No COOP/COEP headers:** Required for Coinbase Wallet SDK. Zama WASM may run single-threaded but still functional.
 - **Self-reported tier revelation:** For hackathon only. Production would use ZK-proof or gateway callback.
-- **No collateral:** Loans are uncollateralized for demo. Production would require overcollateralization or off-chain underwriting.
+- **No collateral:** Loans are uncollateralized for demo. Production would require overcollateralization or offchain underwriting.
 - **Flat interest rate:** Variable rate curves are out of scope for the hackathon timeline.

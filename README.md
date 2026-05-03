@@ -1,6 +1,6 @@
 # Cipher — Confidential Credit on FHE
 
-> **The privacy-preserving on-chain credit scoring and micro-lending protocol built with Zama's Fully Homomorphic Encryption.**
+> **The privacy-preserving onchain credit scoring and micro-lending protocol built with Zama's Fully Homomorphic Encryption.**
 
 [![Zama FHEVM](https://img.shields.io/badge/Built%20with-Zama%20FHEVM-blue)](https://docs.zama.ai)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.27-black)](https://soliditylang.org)
@@ -23,8 +23,6 @@
 ---
 
 ## Demo
-
-**Live Demo:** [https://cipher-fhe.vercel.app](https://cipher-fhe.vercel.app)
 
 **Contract (Sepolia):** [`0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62`](https://sepolia.etherscan.io/address/0x6A0846cAFC2344Fc6fECbc45eB0257fc3a448d62)
 
@@ -49,15 +47,15 @@ Existing DeFi lending protocols (Aave, Compound, Morpho) are **transparent by de
 
 1. **Financial surveillance** — whales, competitors, and analytics firms can monitor and front-run large positions
 2. **Social stigma** — borrowers don't want their community to see they're leveraged or in debt
-3. **Exclusion of underbanked** — 1.4 billion people lack traditional credit history. On-chain credit scoring could help, but nobody wants their entire transaction history published to the world
+3. **Exclusion of underbanked** — 1.4 billion people lack traditional credit history. Onchain credit scoring could help, but nobody wants their entire transaction history published to the world
 
 ### Why FHE — Not ZK, Not MPC
 
-| Approach                         | Can compute on encrypted data?          | Composability               | On-chain verification |
-| -------------------------------- | --------------------------------------- | --------------------------- | --------------------- |
-| Zero-Knowledge Proofs            | ❌ (proves statements, doesn't compute) | ✅                          | ✅                    |
-| Multi-Party Compute              | ✅                                      | ❌ (off-chain coordination) | ❌                    |
-| **Fully Homomorphic Encryption** | **✅**                                  | **✅**                      | **✅**                |
+| Approach                         | Can compute on encrypted data?          | Composability              | Onchain verification |
+| -------------------------------- | --------------------------------------- | -------------------------- | -------------------- |
+| Zero-Knowledge Proofs            | ❌ (proves statements, doesn't compute) | ✅                         | ✅                   |
+| Multi-Party Compute              | ✅                                      | ❌ (offchain coordination) | ❌                   |
+| **Fully Homomorphic Encryption** | **✅**                                  | **✅**                     | **✅**               |
 
 FHE is the **only** technology that allows a smart contract to run arbitrary arithmetic on encrypted inputs, store encrypted state, and let only authorized parties decrypt the result. Zama's FHEVM makes this practical on Ethereum.
 
@@ -74,22 +72,22 @@ FHE is the **only** technology that allows a smart contract to run arbitrary ari
 
 ### Who Needs This?
 
-| Segment                     | Pain Point                                            | How Cipher Helps                            |
-| --------------------------- | ----------------------------------------------------- | ------------------------------------------- |
-| **Crypto-native borrowers** | Don't want collateral/debt positions visible          | Confidential score + private borrowing      |
-| **Emerging market users**   | No traditional credit file, but have on-chain history | Wallet-based credit scoring without doxxing |
-| **DAOs & treasuries**       | Need to lend to contributors privately                | Tier-based access with encrypted terms      |
-| **Fintechs / Neobanks**     | Compliance requires data privacy; want DeFi yields    | White-label confidential credit layer       |
-| **Privacy advocates**       | Refuse to use transparent DeFi                        | End-to-end encrypted financial operations   |
+| Segment                     | Pain Point                                           | How Cipher Helps                            |
+| --------------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| **Crypto-native borrowers** | Don't want collateral/debt positions visible         | Confidential score + private borrowing      |
+| **Emerging market users**   | No traditional credit file, but have onchain history | Wallet-based credit scoring without doxxing |
+| **DAOs & treasuries**       | Need to lend to contributors privately               | Tier-based access with encrypted terms      |
+| **Fintechs / Neobanks**     | Compliance requires data privacy; want DeFi yields   | White-label confidential credit layer       |
+| **Privacy advocates**       | Refuse to use transparent DeFi                       | End-to-end encrypted financial operations   |
 
 ### Competitive Landscape
 
-| Project    | Privacy Tech          | Credit Scoring? | On-chain? | Unique vs Cipher                     |
-| ---------- | --------------------- | --------------- | --------- | ------------------------------------ |
-| Aave       | None                  | ❌              | ✅        | Transparent, no credit scoring       |
-| Teller     | ZK (off-chain oracle) | ✅              | ❌        | Oracle-dependent, not fully on-chain |
-| Spectral   | Public ML             | ✅              | ✅        | Scores are public                    |
-| **Cipher** | **FHE**               | **✅**          | **✅**    | **Fully confidential, end-to-end**   |
+| Project    | Privacy Tech         | Credit Scoring? | Onchain? | Unique vs Cipher                    |
+| ---------- | -------------------- | --------------- | -------- | ----------------------------------- |
+| Aave       | None                 | ❌              | ✅       | Transparent, no credit scoring      |
+| Teller     | ZK (offchain oracle) | ✅              | ❌       | Oracle-dependent, not fully onchain |
+| Spectral   | Public ML            | ✅              | ✅       | Scores are public                   |
+| **Cipher** | **FHE**              | **✅**          | **✅**   | **Fully confidential, end-to-end**  |
 
 ---
 
@@ -169,17 +167,17 @@ score = FHE.select(aboveMax, FHE.asEuint32(850), score);
 
 **Core Functions:**
 
-| Function            | Description                                                                          | Gas (approx) |
-| ------------------- | ------------------------------------------------------------------------------------ | ------------ |
-| `applyForScore`     | Accepts 3 encrypted inputs, reads defaults on-chain, computes weighted score via FHE | ~1.9M        |
-| `getEncryptedScore` | Returns user's encrypted score handle (view)                                         | ~0           |
-| `getEncryptedTier`  | Returns user's encrypted tier handle (view)                                          | ~0           |
-| `revealTier`        | User reveals decrypted tier for on-chain borrowing                                   | ~30K         |
-| `borrow`            | Borrow ETH up to tier limit. 2.5% origination fee retained by pool.                  | ~120K        |
-| `repayLoan`         | Repay active loan. Principal + 5% interest due to close.                             | ~40K         |
-| `depositLiquidity`  | Deposit ETH to lending pool. Earn pro-rata yield.                                    | ~25K         |
-| `withdrawLiquidity` | Withdraw ETH + accrued yield proportional to deposit share                           | ~30K         |
-| `liquidate`         | Anyone can liquidate an overdue loan (>30 days). Records default on-chain.           | ~25K         |
+| Function            | Description                                                                         | Gas (approx) |
+| ------------------- | ----------------------------------------------------------------------------------- | ------------ |
+| `applyForScore`     | Accepts 3 encrypted inputs, reads defaults onchain, computes weighted score via FHE | ~1.9M        |
+| `getEncryptedScore` | Returns user's encrypted score handle (view)                                        | ~0           |
+| `getEncryptedTier`  | Returns user's encrypted tier handle (view)                                         | ~0           |
+| `revealTier`        | User reveals decrypted tier for onchain borrowing                                   | ~30K         |
+| `borrow`            | Borrow ETH up to tier limit. 2.5% origination fee retained by pool.                 | ~120K        |
+| `repayLoan`         | Repay active loan. Principal + 5% interest due to close.                            | ~40K         |
+| `depositLiquidity`  | Deposit ETH to lending pool. Earn pro-rata yield.                                   | ~25K         |
+| `withdrawLiquidity` | Withdraw ETH + accrued yield proportional to deposit share                          | ~30K         |
+| `liquidate`         | Anyone can liquidate an overdue loan (>30 days). Records default onchain.           | ~25K         |
 
 **DeFi Economics:**
 
@@ -192,7 +190,7 @@ score = FHE.select(aboveMax, FHE.asEuint32(850), score);
 
 - `revealTier` is self-reported for the hackathon demo. In production, this would be replaced by:
   - A ZK-proof that the claimed tier matches the encrypted score, OR
-  - A Zama Gateway decryption callback that verifies the tier on-chain
+  - A Zama Gateway decryption callback that verifies the tier onchain
 - The contract uses `FHE.allowThis()` and `FHE.allow()` to enforce ACL on every encrypted handle
 - No reentrancy risk: borrowing uses `.call{value:...}` with checks-effects-interactions pattern
 

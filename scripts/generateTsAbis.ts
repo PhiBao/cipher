@@ -86,7 +86,7 @@ function collectDeployments(): Record<string, Record<number, Deployment & { mtim
           const deployedOnBlock = receipt ? parseInt(receipt.blockNumber, 16) : 0;
           out[tx.contractName] ??= {};
           const existing = out[tx.contractName][chainId];
-          // Newest CREATE per (contract, chain) wins — reflects current on-chain state.
+          // Newest CREATE per (contract, chain) wins — reflects current onchain state.
           if (existing && existing.mtime >= mtime) continue;
           // Foundry writes lowercase addresses; Zama's relayer SDK requires EIP-55
           // checksummed addresses (isChecksummedAddress() check in createRelayerEncryptedInput).
